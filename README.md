@@ -1,2 +1,3 @@
-# airtable-to-google-sheets
-Google apps script code which syncs data from airtable to google sheets.
+# Sync Airtable data to Google Sheets
+
+A companion to this blog post / guide on how to sync Airtable to Google Sheets: 
