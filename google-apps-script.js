@@ -1,12 +1,13 @@
 var api_key = "keyXXXXXXXXXXXX"; //ADD YOUR API KEY FROM AIRTABLE HERE
 var baseID = "appXXXXXXXXXXXX"; //ADD YOUR BASE ID HERE
-var tablesToSync_fromSheetRange = "A14:B16"; //UPDATE CELL RANGE HERE (for tables that you want to sync)
+var tablesToSync_fromSheetRange = "A14:B19"; //UPDATE CELL RANGE HERE (for tables that you want to sync)
 
 ////////// add items to UI menu ///////////
 function onOpen(e) {
    SpreadsheetApp.getUi()
        .createMenu('Airtable to google sheets sync')
        .addItem('Manually sync all data', 'syncData')
+       .addItem('Manually Create all data', 'createData')
        .addToUi();
  }
 
@@ -18,6 +19,24 @@ function syncData(){
   var tablesToSync = ss.getSheetByName("Control panel").getRange(tablesToSync_fromSheetRange).getValues();
     
   //sync each table
+  for (var i = 0; i<tablesToSync.length; i++){
+    var tableName = tablesToSync[i][0];
+    var viewID = tablesToSync[i][1];
+    var airtableData = fetchDataFromAirtable(tableName, viewID);
+    updateDataToSheet(tableName, airtableData);
+    
+    //wait for a bit so we don't get rate limited by Airtable
+    Utilities.sleep(201);
+  }
+}
+////////// function to Create the entire data ///////////
+
+function createData(){
+  //fetch table names from the control panel of the spreadsheet
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tablesToSync = ss.getSheetByName("Control panel").getRange(tablesToSync_fromSheetRange).getValues();
+    
+  //create each table
   for (var i = 0; i<tablesToSync.length; i++){
     var tableName = tablesToSync[i][0];
     var viewID = tablesToSync[i][1];
@@ -49,6 +68,74 @@ function saveFormulas(dataSheets){
     }
   }
   return formulas;
+}
+
+////////// take airtable data and update a sheet ///////////////////////////
+function updateDataToSheet(sheetName, airtableData){
+    //define field schema, which will be added to the row headers
+    var fieldNames = ["Record ID"];
+
+    //add every single field name to the array
+    for (var i = 0; i<airtableData.length; i++){
+      for (var field in airtableData[i].fields){
+        fieldNames.push(field);
+      }
+    }
+    //remove duplicates from field names array
+    fieldNames = fieldNames.filter(function(item, pos){
+      return fieldNames.indexOf(item)== pos;
+    });
+
+    //select the sheet we want to update, or create it if it doesn't exist yet
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet; 
+    if (ss.getSheetByName(sheetName) == null){
+    sheet = ss.insertSheet(sheetName);
+    } else {
+    sheet = ss.getSheetByName(sheetName);
+    }
+
+    //checks if there is a new record and added to table
+    for (var i = 0; i<airtableData.length; i++){
+      var valor1 = sheet.getRange(i+2,1).getDisplayValue();
+      var valor2 = airtableData[i].id;
+      if(valor1 != valor2){
+            sheet.getRange(i+2,1).setValue(airtableData[i].id);
+      }
+    }
+
+  //// add other data to rows ////
+  //for each record in our Airtable data...
+  for (var i = 0; i<airtableData.length; i++){
+    var valor1 = sheet.getRange(i+2,fieldNames.indexOf("Last Modified")+1).getDisplayValue();
+    var valor2 = airtableData[i].fields["Last Modified"]
+    //Checks if records has been modified
+    if (valor1 != valor2){
+      //iterate through each field in the record
+      for (var field in airtableData[i].fields){      
+        
+        //// Checks if the field has been modified ////
+
+        //Check is field is an array
+        var prueba = Array.isArray(airtableData[i].fields[field]);
+        if( prueba == true){
+          var valor1 = sheet.getRange(i+2,fieldNames.indexOf(field)+1).getDisplayValue();
+          var valor2 = airtableData[i].fields[field].join(",");
+          if(valor1 != valor2){
+            sheet.getRange(i+2,fieldNames.indexOf(field)+1) //find the cell we want to update
+            .setValue(airtableData[i].fields[field].join(",")); //update the cell 
+          }      
+        } else{
+          var valor1 = sheet.getRange(i+2,fieldNames.indexOf(field)+1).getDisplayValue();
+          var valor2 = airtableData[i].fields[field];
+          if(valor1 != valor2){
+            sheet.getRange(i+2,fieldNames.indexOf(field)+1) //find the cell we want to update
+            .setValue(airtableData[i].fields[field]); //update the cell
+          }
+        }
+      }
+    }
+  }  
 }
 
 ////////// take airtable data and paste it into a sheet ///////////////////////////
@@ -89,14 +176,29 @@ function pasteDataToSheet(sheetName, airtableData){
   for (var i = 0; i<airtableData.length; i++){
     sheet.getRange(i+2,1).setValue(airtableData[i].id);
   }
-  
+
+    
   //// add other data to rows ////
   //for each record in our Airtable data...
   for (var i = 0; i<airtableData.length; i++){
+    var depu = i;
     //iterate through each field in the record
-    for (var field in airtableData[i].fields){
-      sheet.getRange(i+2,fieldNames.indexOf(field)+1) //find the cell we want to update
-        .setValue(airtableData[i].fields[field]); //update the cell 
+    for (var field in airtableData[i].fields){      
+      var ojo =   airtableData[i].fields[field];
+
+        //Checks is field is an array
+        var prueba = Array.isArray(airtableData[i].fields[field]);
+        if( prueba == true){
+
+            sheet.getRange(i+2,fieldNames.indexOf(field)+1) //find the cell we want to update
+            .setValue(airtableData[i].fields[field].join(",")); //update the cell 
+                
+        } else{
+          
+            sheet.getRange(i+2,fieldNames.indexOf(field)+1) //find the cell we want to update
+            .setValue(airtableData[i].fields[field]); //update the cell
+        }
+        
     }
   }  
 }
